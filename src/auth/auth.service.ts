@@ -3,6 +3,8 @@ import { PrismaService } from "../prisma";
 import { JwtService } from "../common/jwt.service";
 import * as bcrypt from "bcryptjs";
 
+const SALT_ROUNDS = 10;
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -20,7 +22,7 @@ export class AuthService {
       throw new BadRequestException("User already exists");
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
     const user = await this.prisma.user.create({
       data: {
         email,
