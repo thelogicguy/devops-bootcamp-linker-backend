@@ -42,20 +42,15 @@ WORKDIR /app
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nestjs
 
-# Copy package files
+# Copy package files and Prisma schema
 COPY package.json pnpm-lock.yaml ./
+COPY prisma ./prisma
 
-# Install only production dependencies
-RUN npm install -g pnpm && pnpm install --frozen-lockfile --prod
-
-# Copy the generated Prisma client from the build stage
-COPY --from=base --chown=nestjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
+# Install only production dependencies and generate Prisma client
+RUN npm install -g pnpm && pnpm install --frozen-lockfile --prod && pnpm prisma generate
 
 # Copy the built application from the base stage
 COPY --from=base --chown=nestjs:nodejs /app/dist ./dist
-
-# Copy Prisma schema and migrations if needed at runtime
-COPY --from=base --chown=nestjs:nodejs /app/prisma ./prisma
 
 # Set user to the non-root user
 USER nestjs
