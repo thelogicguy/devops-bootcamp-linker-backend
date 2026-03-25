@@ -2,6 +2,8 @@ import { Injectable, UnauthorizedException, BadRequestException } from "@nestjs/
 import { PrismaService } from "../prisma";
 import { JwtService } from "../common/jwt.service";
 
+const BEARER_PREFIX = "Bearer ";
+
 interface UpdateProfilePayload {
   userId: string;
   profileData: {
@@ -57,11 +59,11 @@ export class ProfileService {
   }
 
   async updateProfile(authHeader: string | undefined, payload: UpdateProfilePayload) {
-    if (!authHeader?.startsWith("Bearer ")) {
+    if (!authHeader?.startsWith(BEARER_PREFIX)) {
       throw new UnauthorizedException("Unauthorized");
     }
 
-    const token = authHeader.slice(7);
+    const token = authHeader.slice(BEARER_PREFIX.length);
     const jwtPayload = await this.jwt.verify(token);
     if (!jwtPayload) {
       throw new UnauthorizedException("Unauthorized");

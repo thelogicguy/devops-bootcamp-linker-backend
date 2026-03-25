@@ -2,6 +2,8 @@ import { Injectable, BadRequestException, UnauthorizedException } from "@nestjs/
 import { PrismaService } from "../prisma";
 import { JwtService } from "../common/jwt.service";
 
+const BEARER_PREFIX = "Bearer ";
+
 interface SaveLinksPayload {
   userId: string;
   links: { platform: string; url: string }[];
@@ -28,10 +30,10 @@ export class LinksService {
   }
 
   async saveLinks(authHeader: string | undefined, payload: SaveLinksPayload) {
-    if (!authHeader?.startsWith("Bearer ")) {
+    if (!authHeader?.startsWith(BEARER_PREFIX)) {
       throw new UnauthorizedException("Unauthorized");
     }
-    const token = authHeader.slice(7);
+    const token = authHeader.slice(BEARER_PREFIX.length);
     const jwtPayload = await this.jwt.verify(token);
     if (!jwtPayload) {
       throw new UnauthorizedException("Unauthorized");

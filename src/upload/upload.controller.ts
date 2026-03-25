@@ -1,5 +1,6 @@
 import { Controller, Post, UploadedFile, UseInterceptors } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
+import type { Express } from "express";
 import { v2 as cloudinary } from "cloudinary";
 
 cloudinary.config({
