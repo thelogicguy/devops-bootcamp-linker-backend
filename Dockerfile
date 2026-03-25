@@ -47,13 +47,10 @@ COPY package.json pnpm-lock.yaml ./
 COPY prisma ./prisma
 
 # Install only production dependencies and generate Prisma client
-RUN npm install -g pnpm && pnpm install --prod --frozen-lockfile 
+RUN npm install -g pnpm && pnpm install --prod --frozen-lockfile && pnpm prisma generate
 
 # Copy the built application from the base stage
 COPY --from=base --chown=nestjs:nodejs /app/dist ./dist
-COPY --from=base --chown=nestjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=base --chown=nestjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=base --chown=nestjs:nodejs /app/prisma ./prisma
 
 # Set user to the non-root user
 USER nestjs

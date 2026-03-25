@@ -45,6 +45,9 @@ importers:
       jose:
         specifier: ^5.9.6
         version: 5.10.0
+      prisma:
+        specifier: ^6.5.0
+        version: 6.19.2(typescript@5.9.3)
       reflect-metadata:
         specifier: ^0.2.0
         version: 0.2.2
@@ -85,9 +88,6 @@ importers:
       globals:
         specifier: ^17.4.0
         version: 17.4.0
-      prisma:
-        specifier: ^6.5.0
-        version: 6.19.2(typescript@5.9.3)
       ts-node-dev:
         specifier: ^2.0.0
         version: 2.0.0(@types/node@20.19.33)(typescript@5.9.3)
