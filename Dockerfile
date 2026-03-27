@@ -52,15 +52,18 @@ RUN npm install -g pnpm && pnpm install --prod --frozen-lockfile && pnpm prisma 
 # Copy the built application from the base stage
 COPY --from=base --chown=nestjs:nodejs /app/dist ./dist
 
+# Set environment variables
+ENV PORT=3001
+
 # Set user to the non-root user
 USER nestjs
 
 # Expose the port the app runs on
-EXPOSE 3000
+EXPOSE 3001
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:3000/ || exit 1
+HEALTHCHECK --interval=30s --timeout=3s --start-period=30s --retries=3 \
+  CMD curl -f http://localhost:3001/api || exit 1
 
 # Command to run the application
-CMD ["node", "dist/main.js"]
+CMD ["sh", "-c", "pnpm prisma migrate deploy && node dist/main.js"]
