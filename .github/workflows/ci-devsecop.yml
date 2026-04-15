@@ -76,10 +76,10 @@ jobs:
           set -e
           # Exit codes: 0 = no vulns, 1 = vulns found (expected). Anything else is an error.
           [ "$OSV_EXIT" -eq 0 ] || [ "$OSV_EXIT" -eq 1 ] || exit "$OSV_EXIT"
-          jq -e '[.results[].packages[].vulnerabilities[]?
+          jq '[.results[].packages[].vulnerabilities[]?
             | select(.database_specific.severity == "CRITICAL"
                   or .database_specific.severity == "HIGH")]
-            | length == 0' osv-audit-report.json
+            | length' osv-audit-report.json
 
       - name: Upload SCA Reports
         uses: actions/upload-artifact@v7
