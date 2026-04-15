@@ -6,6 +6,12 @@ FROM $NODE AS base
 # Set the working directory
 WORKDIR /app
 
+# Install build dependencies
+RUN apk add --no-cache \
+    python3 \
+    build-base \
+    openssl
+
 # Copy package files
 COPY package.json pnpm-lock.yaml ./
 
@@ -27,6 +33,9 @@ RUN pnpm build
 # Production stage
 FROM $NODE AS production
 
+ENV NODE_ENV=production \
+    PORT=3001
+
 # Update and install curl for health checks
 RUN apk add --no-cache curl
 
@@ -46,9 +55,6 @@ RUN npm install -g pnpm && pnpm install --prod --frozen-lockfile && pnpm prisma 
 
 # Copy the built application from the base stage
 COPY --from=base --chown=nestjs:nodejs /app/dist ./dist
-
-# Set environment variables
-ENV PORT=3001
 
 # Set user to the non-root user
 USER nestjs
