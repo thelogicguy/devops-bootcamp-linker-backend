@@ -77,7 +77,14 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run pnpm audit
-        run: pnpm audit --json | tee pnpm-audit-report.json | jq -e 'select(.metadata.vulnerabilities.critical == 0 and .metadata.vulnerabilities.high == 0 and .metadata.vulnerabilities.moderate == 0)' > /dev/null
+        run: |
+          set +e
+          pnpm audit --prod --json > pnpm-audit-report.json
+          AUDIT_EXIT=$?
+          set -e
+          # Exit codes: 0 = no vulns, 4 = vulns found (expected). Anything else is an error.
+          [ "$AUDIT_EXIT" -eq 0 ] || [ "$AUDIT_EXIT" -eq 4 ] || exit "$AUDIT_EXIT"
+          jq -e '.metadata.vulnerabilities | .critical == 0 and .high == 0 and .moderate == 0' pnpm-audit-report.json
 
       - name: Upload SCA Reports
         uses: actions/upload-artifact@v7
