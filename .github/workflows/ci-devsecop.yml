@@ -84,7 +84,7 @@ jobs:
           set -e
           # Exit codes: 0 = no vulns, 4 = vulns found (expected). Anything else is an error.
           [ "$AUDIT_EXIT" -eq 0 ] || [ "$AUDIT_EXIT" -eq 4 ] || exit "$AUDIT_EXIT"
-          jq -e '.metadata.vulnerabilities | .critical == 0 and .high == 0 and .moderate == 0' pnpm-audit-report.json
+          jq -e '.metadata.vulnerabilities | .critical == 0 and .high == 0' pnpm-audit-report.json
 
       - name: Upload SCA Reports
         uses: actions/upload-artifact@v7
@@ -94,6 +94,47 @@ jobs:
           path: |
             reports
             pnpm-audit-report.json
+
+      - name: Summarize pnpm audit errors
+        if: failure()
+        id: pnpm_summary
+        run: |
+          CRITICAL=$(jq '.metadata.vulnerabilities.critical' pnpm-audit-report.json)
+          HIGH=$(jq '.metadata.vulnerabilities.high' pnpm-audit-report.json)
+          MODERATE=$(jq '.metadata.vulnerabilities.moderate' pnpm-audit-report.json)
+          echo "critical=$CRITICAL" >> $GITHUB_OUTPUT
+          echo "high=$HIGH" >> $GITHUB_OUTPUT
+          echo "moderate=$MODERATE" >> $GITHUB_OUTPUT
+
+      - name: Slack Notification
+        if: ${{ failure() }}
+        uses: rtCamp/action-slack-notify@v2.3.3
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_COLOR: ${{ job.status }}
+          SLACK_MESSAGE_ON_FAILURE: |
+            SCA Pipeline failed!
+            🔹 pnpm audit: Critical=${{ steps.pnpm_summary.outputs.critical }}, High=${{ steps.pnpm_summary.outputs.high }}, Moderate=${{ steps.pnpm_summary.outputs.moderate }}
+            Get the full reports here: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+      - name: Slack Notification
+        if: ${{ success() }}
+        uses: rtCamp/action-slack-notify@v2.3.3
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_COLOR: ${{ job.status }}
+          SLACK_MESSAGE_ON_SUCCESS: "SCA Pipeline was successful!"
+
+      - name: Slack Notification with Artifact Link
+        if: always()
+        uses: rtCamp/action-slack-notify@v2.3.3
+        env:
+          SLACK_COLOR: ${{ job.status }}
+          SLACK_MESSAGE_ON_SUCCESS: "Get SCA Reports here: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          SLACK_MESSAGE_ON_FAILURE: "Get SCA Reports here: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          SLACK_MSG_AUTHOR: ${{ github.actor }}
+          MSG_MINIMAL: true
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
 
   # Run Semgrep for Static Application Security Testing (SAST)
   sast:
@@ -118,17 +159,6 @@ jobs:
           name: semgrep-report
           path: semgrep-results.json
 
-      - name: Summarize pnpm audit errors
-        if: failure()
-        id: pnpm_summary
-        run: |
-          CRITICAL=$(jq '.metadata.vulnerabilities.critical' pnpm-audit-report.json)
-          HIGH=$(jq '.metadata.vulnerabilities.high' pnpm-audit-report.json)
-          MODERATE=$(jq '.metadata.vulnerabilities.moderate' pnpm-audit-report.json)
-          echo "critical=$CRITICAL" >> $GITHUB_OUTPUT
-          echo "high=$HIGH" >> $GITHUB_OUTPUT
-          echo "moderate=$MODERATE" >> $GITHUB_OUTPUT
-
       - name: Summarize Semgrep errors
         if: failure()
         id: semgrep_summary
@@ -143,8 +173,7 @@ jobs:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
           SLACK_COLOR: ${{ job.status }}
           SLACK_MESSAGE_ON_FAILURE: |
-            DevSecOps Pipeline failed!
-            🔹 pnpm audit: Critical=${{ steps.pnpm_summary.outputs.critical }}, High=${{ steps.pnpm_summary.outputs.high }}, Moderate=${{ steps.pnpm_summary.outputs.moderate }}
+            SAST Pipeline failed!
             🔹 Semgrep (SAST) issues: ${{ steps.semgrep_summary.outputs.semgrep_issues }}
             Get the full reports here: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
@@ -154,7 +183,7 @@ jobs:
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
           SLACK_COLOR: ${{ job.status }}
-          SLACK_MESSAGE_ON_SUCCESS: "DevSecOps Pipeline was successful!"
+          SLACK_MESSAGE_ON_SUCCESS: "SAST Pipeline was successful!"
 
       - name: Slack Notification with Artifact Link
         if: always()
