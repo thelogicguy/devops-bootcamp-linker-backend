@@ -78,7 +78,7 @@ jobs:
                 context: .
                 load: true
                 tags: |
-                  ${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.IMAGE_TAG }}
+                  ${{ steps.tag.outputs.tags }}
                 cache-from: type=gha
                 cache-to: type=gha,mode=max
             
