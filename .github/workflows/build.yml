@@ -65,8 +65,8 @@ jobs:
         with:
           images: docker.io/${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=sha,format=short,prefix=sha-,value=${{ github.event.workflow_run.head_sha || github.sha }}
-            type=raw,value=latest,enable=${{ github.event_name != 'workflow_run' || github.event.workflow_run.head_branch == 'main' }}
+            type=sha,format=short,prefix=sha-
+            type=raw,value=latest
 
       - name: Build image
         uses: docker/build-push-action@v5
@@ -74,7 +74,7 @@ jobs:
           context: .
           load: true
           push: false
-          tags: ${{ steps.tag.outputs.tags }}
+          tags: docker.io/${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
           provenance: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
