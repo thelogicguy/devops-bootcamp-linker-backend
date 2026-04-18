@@ -65,15 +65,8 @@ jobs:
         with:
           images: docker.io/${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=sha,format=short,prefix=sha-
-            type=raw,value=latest
-
-      - name: Validate image tag
-        run: |
-          : "${TAGS:?Image tag is empty — metadata-action failed to produce a tag}"
-          echo "Building with tag: $TAGS"
-        env:
-          TAGS: ${{ steps.tag.outputs.tags }}
+            type=sha,format=short,prefix=sha-,value=${{ github.event.workflow_run.head_sha || github.sha }}
+            type=raw,value=latest,enable=${{ github.event_name != 'workflow_run' || github.event.workflow_run.head_branch == 'main' }}
 
       - name: Build image
         uses: docker/build-push-action@v5
