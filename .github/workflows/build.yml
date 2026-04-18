@@ -87,7 +87,7 @@ jobs:
         id: push
         if: success()
         run: |
-          docker push ${{ steps.tag.outputs.tag_value }}
+          docker push ${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.tag_value }}
           docker push ${{ env.IMAGE_NAME }}:latest
           DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' \
             "${{ steps.tag.outputs.full }}" | cut -d'@' -f2)
