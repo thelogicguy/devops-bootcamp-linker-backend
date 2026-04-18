@@ -44,12 +44,15 @@ jobs:
 
       - name: Resolve build SHA
         id: sha
+        shell: bash  # Ensure bash for string manipulation
         run: |
-          SHA="${{ github.event.workflow_run.head_sha }}"
-          if [ -z "$SHA" ]; then
-            SHA="${{ github.sha }}"
-          fi
-          SHORT_SHA="${SHA:0:7}"
+          # Priority 1: workflow_run SHA
+          # Priority 2: manual input ref (if provided)
+          # Priority 3: default github.sha
+          SHA="${{ github.event.workflow_run.head_sha || github.event.inputs.ref || github.sha }}"
+          
+          SHORT_SHA=$(echo ${SHA} | cut -c1-7)
+          
           echo "full=${SHA}" >> $GITHUB_OUTPUT
           echo "short=${SHORT_SHA}" >> $GITHUB_OUTPUT
           echo "Resolved SHA: ${SHA} (short: ${SHORT_SHA})"
@@ -85,7 +88,7 @@ jobs:
           push: false
           provenance: false
           tags: |
-            ${{ steps.tag.outputs.full }}
+            ${{ env.IMAGE_NAME }}:sha-${{ steps.sha.outputs.short }}
             ${{ env.IMAGE_NAME }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
