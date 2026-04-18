@@ -14,7 +14,7 @@ on:
 
 env:
   DOCKER_REPO: thelogicguy
-  IMAGE_NAME: bootcamp-backend
+  IMAGE_NAME: devopsbootcamp-backend
 
 jobs:
   build-scan-push:
@@ -41,14 +41,24 @@ jobs:
           SLACK_MESSAGE: |
             *Actor:* ${{ github.actor }}
             *Triggered by:* ${{ github.event_name }}
-            *Commit:* ${{ github.event.workflow_run.head_sha || github.sha }}
             *Run:* https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+      # ✅ Resolve SHA explicitly in shell — avoids empty expression fallback bug
+      #    in metadata-action's YAML multiline block
+      - name: Resolve build SHA
+        id: sha
+        run: |
+          SHA="${{ github.event.workflow_run.head_sha }}"
+          if [ -z "$SHA" ]; then
+            SHA="${{ github.sha }}"
+          fi
+          echo "value=${SHA}" >> $GITHUB_OUTPUT
+          echo "Resolved SHA: ${SHA}"
 
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          # ✅ workflow_run needs head_sha — github.sha points to wrong commit on this trigger
-          ref: ${{ github.event.workflow_run.head_sha || github.event.inputs.ref || github.sha }}
+          ref: ${{ steps.sha.outputs.value || github.event.inputs.ref }}
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -65,8 +75,16 @@ jobs:
         with:
           images: docker.io/${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=sha,format=short,prefix=sha-
-            type=raw,value=latest
+            type=sha,format=short,prefix=sha-,value=${{ steps.sha.outputs.value }}
+            type=raw,value=latest,enable=${{ github.event_name != 'workflow_run' || github.event.workflow_run.head_branch == 'main' }}
+
+      - name: Validate image tag
+        run: |
+          : "${TAGS:?Image tag is empty — SHA resolved to: $SHA}"
+          echo "Building with tag: $TAGS"
+        env:
+          TAGS: ${{ steps.tag.outputs.tags }}
+          SHA: ${{ steps.sha.outputs.value }}
 
       - name: Build image
         uses: docker/build-push-action@v5
@@ -74,7 +92,7 @@ jobs:
           context: .
           load: true
           push: false
-          tags: docker.io/${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
+          tags: ${{ steps.tag.outputs.tags }}
           provenance: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -106,7 +124,7 @@ jobs:
         if: success()
         run: |
           docker push ${{ steps.tag.outputs.tags }}
-          # ✅ Capture first tag only for digest lookup — multiline tags breaks inspect
+          # ✅ First tag only — multiline tags string breaks docker inspect
           FIRST_TAG=$(echo "${{ steps.tag.outputs.tags }}" | head -n1)
           DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$FIRST_TAG" | cut -d'@' -f2)
           echo "digest=${DIGEST}" >> $GITHUB_OUTPUT
