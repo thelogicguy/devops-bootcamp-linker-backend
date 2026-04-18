@@ -77,7 +77,10 @@ jobs:
               with:
                 context: .
                 load: true
-                tags: ${{ steps.tag.outputs.tags }}
+                tags: |
+                  ${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.IMAGE_TAG }}
+                cache-from: type=gha
+                cache-to: type=gha,mode=max
             
             # Install Trivy, a vulnerability scanner for container images, 
             # to ensure the built image is secure before pushing to Docker Hub

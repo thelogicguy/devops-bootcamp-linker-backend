@@ -1,70 +1,56 @@
-# Use the official Node.js 24 Alpine image as the base
-ARG NODE=node:24-alpine
+# syntax=docker/dockerfile:1.4
+FROM node:24-alpine AS base
 
-FROM $NODE AS base
-
-# Set the working directory
 WORKDIR /app
 
-# Install build dependencies
-RUN apk add --no-cache \
-    python3 \
-    build-base \
-    openssl
+# Build dependencies (only needed for native modules)
+RUN apk add --no-cache python3 build-base openssl
 
-# Copy package files
+RUN npm install -g pnpm@latest
+
 COPY package.json pnpm-lock.yaml ./
-
-# Install pnpm
-RUN npm install -g pnpm
-
-# Install dependencies
 RUN pnpm install --frozen-lockfile
 
-# Copy the rest of the application code
 COPY . .
 
-# Generate Prisma client
-RUN pnpm prisma generate
+# Explicit Prisma binary target for Alpine (musl)
+ENV PRISMA_CLI_BINARY_TARGETS=linux-musl-openssl-3.0.x
+RUN pnpm prisma generate && pnpm build
 
-# Build the application
-RUN pnpm build
+# --- Production stage ---
+FROM node:24-alpine AS production
 
-# Production stage
-FROM $NODE AS production
+LABEL org.opencontainers.image.source="https://github.com/thelogicguy/devops-bootcamp-linker-backend.git"
 
 ENV NODE_ENV=production \
-    PORT=3001
+    PORT=3001 \
+    PRISMA_CLI_BINARY_TARGETS=linux-musl-openssl-3.0.x
 
-# Update and install curl for health checks
-RUN apk add --no-cache curl
+RUN apk add --no-cache curl --no-cache
 
-# Set the working directory
 WORKDIR /app
 
-# Create non-root user and group
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nestjs
 
-# Copy package files and Prisma schema
+# Copy pnpm from base instead of reinstalling
+COPY --from=base /usr/local/lib/node_modules/pnpm /usr/local/lib/node_modules/pnpm
+RUN ln -s /usr/local/lib/node_modules/pnpm/bin/pnpm.cjs /usr/local/bin/pnpm
+
 COPY package.json pnpm-lock.yaml ./
 COPY prisma ./prisma
 
-# Install only production dependencies and generate Prisma client
-RUN npm install -g pnpm && pnpm install --prod --frozen-lockfile && pnpm prisma generate
+# Install prod deps and generate Prisma client
+RUN pnpm install --prod --frozen-lockfile && pnpm prisma generate
 
-# Copy the built application from the base stage
 COPY --from=base --chown=nestjs:nodejs /app/dist ./dist
 
-# Set user to the non-root user
 USER nestjs
 
-# Expose the port the app runs on
 EXPOSE 3001
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=30s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
   CMD curl -f http://localhost:3001/api || exit 1
 
-# Command to run the application
-CMD ["sh", "-c", "pnpm prisma migrate deploy && node dist/main.js"]
+# Exec form for proper SIGTERM handling — migrations should run separately
+CMD ["node", "dist/main.js"]
