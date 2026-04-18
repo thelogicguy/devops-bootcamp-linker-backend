@@ -14,7 +14,6 @@ on:
 
 env:
   IMAGE_NAME: thelogicguy/devopsbootcamp-backend
-  DOCKERFILE_PATH: ./Dockerfile
 
 jobs:
   build-scan-push:
@@ -30,7 +29,7 @@ jobs:
 
     outputs:
       image-digest: ${{ steps.push.outputs.digest }}
-      image-tag: ${{ steps.tag.outputs.tags }}
+      image-tag: ${{ steps.tag.outputs.full }}
 
     steps:
       - name: Slack — Pipeline Started
@@ -43,8 +42,6 @@ jobs:
             *Triggered by:* ${{ github.event_name }}
             *Run:* https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
-      # ✅ Resolve SHA explicitly in shell — avoids empty expression fallback bug
-      #    in metadata-action's YAML multiline block
       - name: Resolve build SHA
         id: sha
         run: |
@@ -52,13 +49,15 @@ jobs:
           if [ -z "$SHA" ]; then
             SHA="${{ github.sha }}"
           fi
-          echo "value=${SHA}" >> $GITHUB_OUTPUT
-          echo "Resolved SHA: ${SHA}"
+          SHORT_SHA="${SHA:0:7}"
+          echo "full=${SHA}" >> $GITHUB_OUTPUT
+          echo "short=${SHORT_SHA}" >> $GITHUB_OUTPUT
+          echo "Resolved SHA: ${SHA} (short: ${SHORT_SHA})"
 
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ steps.sha.outputs.value || github.event.inputs.ref }}
+          ref: ${{ steps.sha.outputs.full }}
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -69,31 +68,35 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Generate image tag
+      - name: Set image tag
         id: tag
-        run: echo "IMAGE_TAG=${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
-      
-      - name: Build Image
+        run: |
+          IMAGE_TAG="sha-${{ steps.sha.outputs.short }}"
+          FULL_IMAGE="${{ env.IMAGE_NAME }}:${IMAGE_TAG}"
+          echo "value=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+          echo "full=${FULL_IMAGE}" >> $GITHUB_OUTPUT
+          echo "Tagged as: ${FULL_IMAGE}"
+
+      - name: Build image
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ${{ env.DOCKERFILE_PATH }}
-          push: false
           load: true
+          push: false
+          provenance: false
           tags: |
-            ${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.IMAGE_TAG }}
+            ${{ steps.tag.outputs.full }}
             ${{ env.IMAGE_NAME }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       # ⚠️ Pinned to 0.35.0 — first clean release post March 2026 supply chain compromise
-      # Do not upgrade without verifying the release is clean
-      # See: https://www.stepsecurity.io/blog/trivy-compromised-a-second-time
+      # Do not upgrade without verifying. See: https://www.stepsecurity.io/blog/trivy-compromised-a-second-time
       - name: Scan image for vulnerabilities
         uses: aquasecurity/trivy-action@0.35.0
         with:
           scan-type: image
-          image-ref: ${{ steps.tag.outputs.tags }}
+          image-ref: ${{ steps.tag.outputs.full }}
           format: table
           exit-code: "1"
           ignore-unfixed: true
@@ -112,17 +115,17 @@ jobs:
         id: push
         if: success()
         run: |
-          docker push ${{ steps.tag.outputs.tags }}
-          # ✅ First tag only — multiline tags string breaks docker inspect
-          FIRST_TAG=$(echo "${{ steps.tag.outputs.tags }}" | head -n1)
-          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$FIRST_TAG" | cut -d'@' -f2)
+          docker push ${{ steps.tag.outputs.full }}
+          docker push ${{ env.IMAGE_NAME }}:latest
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' \
+            "${{ steps.tag.outputs.full }}" | cut -d'@' -f2)
           echo "digest=${DIGEST}" >> $GITHUB_OUTPUT
 
       - name: Export image digest
         if: success()
         run: |
-          echo "${{ steps.push.outputs.digest }}" > image-digest.txt
-          echo "IMAGE=${{ steps.tag.outputs.tags }}" >> image-digest.txt
+          echo "TAG=${{ steps.tag.outputs.full }}" > image-digest.txt
+          echo "DIGEST=${{ steps.push.outputs.digest }}" >> image-digest.txt
 
       - name: Upload image digest
         if: success()
@@ -140,7 +143,7 @@ jobs:
           SLACK_COLOR: ${{ job.status }}
           SLACK_MESSAGE: |
             Docker pipeline *${{ job.status }}*
-            *Image:* ${{ steps.tag.outputs.tags }}
+            *Image:* ${{ steps.tag.outputs.full }}
             *Digest:* ${{ steps.push.outputs.digest }}
             *Actor:* ${{ github.actor }}
             *Logs:* https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}

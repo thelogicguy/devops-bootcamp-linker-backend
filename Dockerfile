@@ -20,7 +20,6 @@ RUN pnpm prisma generate && pnpm build
 # --- Production stage ---
 FROM node:24-alpine AS production
 
-LABEL org.opencontainers.image.source="https://github.com/thelogicguy/devops-bootcamp-linker-backend.git"
 
 ENV NODE_ENV=production \
     PORT=3001 \
