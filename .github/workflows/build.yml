@@ -1,10 +1,8 @@
 name: Build, Scan & Push
 
-# ✅ Fires automatically after your CI workflow passes on main
-# ✅ Also supports manual dispatch with optional SHA override for hotfixes
 on:
   workflow_run:
-    workflows: ["Backend CI Pipeline"]               # replace with your exact CI workflow name
+    workflows: ["Backend CI Pipeline"]
     types: [completed]
     branches: [main]
   workflow_dispatch:
@@ -16,24 +14,22 @@ on:
 
 env:
   DOCKER_REPO: thelogicguy
-  IMAGE_NAME: devopsbootcamp-backend
-  TRIVY_VERSION: "0.51.4"          # ✅ pinned — update deliberately, not silently
+  IMAGE_NAME: bootcamp-backend
 
 jobs:
   build-scan-push:
-    # ✅ For workflow_run: only proceed if CI actually passed.
     if: >
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
 
     runs-on: ubuntu-latest
-    timeout-minutes: 20             # ✅ prevents runaway builds burning Actions minutes
+    timeout-minutes: 20
 
     permissions:
-      contents: read                # ✅ removed packages:write — not pushing to GHCR
+      contents: read
 
     outputs:
-      image-digest: ${{ steps.push.outputs.digest }}   # ✅ expose digest for downstream CD
+      image-digest: ${{ steps.push.outputs.digest }}
       image-tag: ${{ steps.tag.outputs.tags }}
 
     steps:
@@ -45,13 +41,14 @@ jobs:
           SLACK_MESSAGE: |
             *Actor:* ${{ github.actor }}
             *Triggered by:* ${{ github.event_name }}
-            *Branch:* ${{ github.ref_name }}
+            *Commit:* ${{ github.event.workflow_run.head_sha || github.sha }}
             *Run:* https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.ref || github.sha }}
+          # ✅ workflow_run needs head_sha — github.sha points to wrong commit on this trigger
+          ref: ${{ github.event.workflow_run.head_sha || github.event.inputs.ref || github.sha }}
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -64,19 +61,17 @@ jobs:
 
       - name: Generate image tag
         id: tag
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@v5
         with:
-          images: ${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}
+          images: docker.io/${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=ref,event=branch
-            type=ref,event=tag
-            type=sha,format=short
-      
+            type=sha,format=short,prefix=sha-
+            type=raw,value=latest
 
       - name: Validate image tag
         run: |
-          : "${TAGS:?Image tag is empty — metadata-action failed}"
-          echo "Building: $TAGS"
+          : "${TAGS:?Image tag is empty — metadata-action failed to produce a tag}"
+          echo "Building with tag: $TAGS"
         env:
           TAGS: ${{ steps.tag.outputs.tags }}
 
@@ -84,15 +79,17 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          load: true                # load into local daemon for scanning
+          load: true
           push: false
           tags: ${{ steps.tag.outputs.tags }}
-          provenance: false         # ✅ explicit — avoids manifest bloat on Docker Hub
+          provenance: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # ✅ Official action — pinned version, no curl pipe risk
-      - name: Install Trivy
+      # ⚠️ Pinned to 0.35.0 — first clean release post March 2026 supply chain compromise
+      # Do not upgrade without verifying the release is clean
+      # See: https://www.stepsecurity.io/blog/trivy-compromised-a-second-time
+      - name: Scan image for vulnerabilities
         uses: aquasecurity/trivy-action@0.35.0
         with:
           scan-type: image
@@ -107,27 +104,26 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: trivy-report-${{ github.run_id }}   # ✅ run_id suffix prevents artifact collisions
+          name: trivy-report-${{ github.run_id }}
           path: trivy-report.txt
           retention-days: 30
 
-      # ✅ Push only if scan passed — captures digest for downstream CD use
       - name: Push image to Docker Hub
         id: push
         if: success()
         run: |
           docker push ${{ steps.tag.outputs.tags }}
-          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' \
-            ${{ steps.tag.outputs.tags }} | cut -d'@' -f2)
+          # ✅ Capture first tag only for digest lookup — multiline tags breaks inspect
+          FIRST_TAG=$(echo "${{ steps.tag.outputs.tags }}" | head -n1)
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$FIRST_TAG" | cut -d'@' -f2)
           echo "digest=${DIGEST}" >> $GITHUB_OUTPUT
 
-      # ✅ Digest artifact lets your CD pipeline deploy by immutable digest, not mutable tag
       - name: Export image digest
         if: success()
         run: |
           echo "${{ steps.push.outputs.digest }}" > image-digest.txt
           echo "IMAGE=${{ steps.tag.outputs.tags }}" >> image-digest.txt
-      
+
       - name: Upload image digest
         if: success()
         uses: actions/upload-artifact@v4
