@@ -83,6 +83,13 @@ jobs:
           SHA: ${{ steps.sha.outputs.value }}
 
       - name: Build image
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+          RUN: |
+            if [ -z $"IMAGE_TAG" ]; then
+            echo "IMAGE_TAG is empty, defaulting to 'latest'"
+            IMAGE_TAG="latest"
+            fi  
         uses: docker/build-push-action@v5
         with:
           context: .
