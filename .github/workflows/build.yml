@@ -73,11 +73,7 @@ jobs:
         id: tag
         uses: docker/metadata-action@v5
         with:
-          images: docker.io/${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=sha,format=short,prefix=sha-
-            type=raw,value=latest,enable=${{ github.event_name != 'workflow_run' || github.event.workflow_run.head_branch == 'main' }}
-
+          images: docker.io/${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:sha-{{short_sha}}
       - name: Validate image tag
         run: |
           : "${TAGS:?Image tag is empty — SHA resolved to: $SHA}"
