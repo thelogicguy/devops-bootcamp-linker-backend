@@ -13,8 +13,7 @@ on:
         default: "main"
 
 env:
-  DOCKER_REPO: thelogicguy
-  IMAGE_NAME: devopsbootcamp-backend
+  IMAGE_NAME: thelogicguy/devopsbootcamp-backend
   DOCKERFILE_PATH: ./Dockerfile
 
 jobs:
