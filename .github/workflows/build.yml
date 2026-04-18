@@ -1,25 +1,16 @@
 name: Build, Scan & Push
 
 on:
-  workflow_run:
-    workflows: ["Backend CI Pipeline"]
-    types: [completed]
-    branches: [main]
+  push:
+    branches:
+      - main
   workflow_dispatch:
-    inputs:
-      ref:
-        description: "Git ref to build (branch, tag, or SHA)"
-        required: false
-        default: "main"
 
 env:
   IMAGE_NAME: thelogicguy/devopsbootcamp-backend
 
 jobs:
   build-scan-push:
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
 
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -42,26 +33,9 @@ jobs:
             *Triggered by:* ${{ github.event_name }}
             *Run:* https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
-      - name: Resolve build SHA
-        id: sha
-        shell: bash  # Ensure bash for string manipulation
-        run: |
-          # Priority 1: workflow_run SHA
-          # Priority 2: manual input ref (if provided)
-          # Priority 3: default github.sha
-          SHA="${{ github.event.workflow_run.head_sha || github.event.inputs.ref || github.sha }}"
-          
-          SHORT_SHA=$(echo ${SHA} | cut -c1-7)
-          
-          echo "full=${SHA}" >> $GITHUB_OUTPUT
-          echo "short=${SHORT_SHA}" >> $GITHUB_OUTPUT
-          echo "Resolved SHA: ${SHA} (short: ${SHORT_SHA})"
-
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          ref: ${{ steps.sha.outputs.full }}
-
+      
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -71,14 +45,9 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Set image tag
+      - name: Generate Image Tag
         id: tag
-        run: |
-          IMAGE_TAG="sha-${{ steps.sha.outputs.short }}"
-          FULL_IMAGE="${{ env.IMAGE_NAME }}:${IMAGE_TAG}"
-          echo "value=${IMAGE_TAG}" >> $GITHUB_OUTPUT
-          echo "full=${FULL_IMAGE}" >> $GITHUB_OUTPUT
-          echo "Tagged as: ${FULL_IMAGE}"
+        run: echo "IMAGE_TAG=${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
 
       - name: Build image
         uses: docker/build-push-action@v5
@@ -88,7 +57,7 @@ jobs:
           push: false
           provenance: false
           tags: |
-            ${{ env.IMAGE_NAME }}:sha-${{ steps.sha.outputs.short }}
+            ${{ env.IMAGE_NAME }}:sha-${{ steps.tag.outputs.IMAGE_TAG }}
             ${{ env.IMAGE_NAME }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
