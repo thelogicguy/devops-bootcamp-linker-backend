@@ -21,7 +21,7 @@ env:
 
 jobs:
   build-scan-push:
-    # ✅ For workflow_run: only proceed if CI actually passed
+    # ✅ For workflow_run: only proceed if CI actually passed.
     if: >
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
@@ -64,12 +64,14 @@ jobs:
 
       - name: Generate image tag
         id: tag
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
-          images: docker.io/${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}
           tags: |
+            type=ref,event=branch
+            type=ref,event=tag
             type=sha,format=short
-            type=raw,value=latest,enable={{is_default_branch}}
+      
 
       - name: Validate image tag
         run: |
