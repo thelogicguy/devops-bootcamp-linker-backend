@@ -26,7 +26,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@nestjs/cli": "^11.0.0",
+    "@nestjs/cli": "^11.0.16",
     "@typescript-eslint/eslint-plugin": "^8.57.2",
     "@typescript-eslint/parser": "^8.57.2",
     "@types/bcryptjs": "^2.4.6",
