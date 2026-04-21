@@ -5,7 +5,7 @@ const secret = new TextEncoder().encode(
   process.env.JWT_SECRET || "dev-link-secret-change-in-production"
 );
 
-export interface JwtPayload {
+export interface JwtPayload extends jose.JWTPayload {
   id: string;
   email: string;
 }
@@ -23,7 +23,11 @@ export class JwtService {
   async verify(token: string): Promise<JwtPayload | null> {
     try {
       const { payload } = await jose.jwtVerify(token, secret);
-      return { id: payload.id as string, email: payload.email as string };
+
+      return {
+        id: payload.id as string,
+        email: payload.email as string,
+      };
     } catch {
       return null;
     }
